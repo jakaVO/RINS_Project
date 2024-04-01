@@ -8,12 +8,15 @@ from sensor_msgs.msg import Image, PointCloud2
 from sensor_msgs_py import point_cloud2 as pc2
 
 from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point, Vector3
 
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
 
 from ultralytics import YOLO
+from robot_commander import listOfCordinates
+
 
 # from rclpy.parameter import Parameter
 # from rcl_interfaces.msg import SetParametersResult
@@ -80,6 +83,41 @@ class detect_faces(Node):
 				cv_image = cv2.circle(cv_image, (cx,cy), 5, self.detection_color, -1)
 
 				self.faces.append((cx,cy))
+
+				self.get_logger().info(f"{listOfCordinates}")
+
+				all_nodes = [el for el in listOfCordinates if el[2] == True]
+
+				current_node = None
+				if len(all_nodes) > 0:
+					all_nodes[0]
+
+				if current_node != None:
+
+					self.get_logger().info(f"Current node: {current_node}")
+
+					v1 = np.array([bbox[1][0] - bbox[0][0], bbox[1][1] - bbox[0][1], bbox[1][1] - bbox[0][1]])
+
+					v2 = np.array([bbox[2][0] - bbox[0][0], bbox[2][1] - bbox[0][1], bbox[2][1] - bbox[0][1]])
+
+					normala = np.cross(v1, v2)
+					self.get_logger().info(f"normala: {normala}")
+
+
+
+				#marker = Marker()
+				#marker.header().frame_id = "base_link"
+				#marker.type = Marker.ARROW
+				#marker.action = Marker.ADD
+				#marker.scale = Vector3(0.1, 0.2, 0.2)
+
+				#marker.color.a = 1.0
+				#marker.color.r = 1.0
+				#marker.pose.orientation.w = 1.0
+				#marker.points.append(Point(cx, cy, 0.143))
+				#marker.points.append(Points(cx + dx))
+
+
 
 			cv2.imshow("image", cv_image)
 			key = cv2.waitKey(1)

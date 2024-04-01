@@ -296,7 +296,18 @@ class RobotCommander(Node):
     def debug(self, msg):
         self.get_logger().debug(msg)
         return
-    
+
+listOfCordinates = [
+        [-1.53,-0.647, False],
+        [-0.105,-1.78, False],
+        [1.11,-2.0, False],
+        [3.09,-1.0, False],
+        [1.81,0.0418, False],
+        [2.25,1.95, False],
+        [0.932,1.71, False],
+        [-1.14,1.09, False]
+    ]
+
 def main(args=None):
     
     rclpy.init(args=args)
@@ -312,23 +323,31 @@ def main(args=None):
     # If it is docked, undock it first
     if rc.is_docked:
         rc.undock()
-    
-    # Finally send it a goal to reach
-    goal_pose = PoseStamped()
-    goal_pose.header.frame_id = 'map'
-    goal_pose.header.stamp = rc.get_clock().now().to_msg()
 
-    goal_pose.pose.position.x = 2.6
-    goal_pose.pose.position.y = -1.3
-    goal_pose.pose.orientation = rc.YawToQuaternion(0.57)
+    for el in listOfCordinates:
+        el[2] = True
+        x=el[0]
+        y=el[1]
+        # Finally send it a goal to reach
+        goal_pose = PoseStamped()
+        goal_pose.header.frame_id = 'map'
+        goal_pose.header.stamp = rc.get_clock().now().to_msg()
 
-    rc.goToPose(goal_pose)
+        goal_pose.pose.position.x = x
+        goal_pose.pose.position.y = y
+        goal_pose.pose.orientation = rc.YawToQuaternion(0.0)
 
-    while not rc.isTaskComplete():
-        rc.info("Waiting for the task to complete...")
-        time.sleep(1)
+        rc.goToPose(goal_pose)
 
-    rc.spin(-0.57)
+        while not rc.isTaskComplete():
+            rc.info("Waiting for the task to complete...")
+            time.sleep(1)
+
+        rc.spin(-360.0)
+        rc.info("sleep 10...")
+        time.sleep(10)
+
+        el[2] = False
 
     rc.destroyNode()
 
