@@ -42,6 +42,7 @@ import numpy as np
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from rclpy.qos import qos_profile_sensor_data
+import math
 
 import tf_transformations
 
@@ -338,11 +339,11 @@ class RobotCommander(Node):
     def _dockCallback(self, msg: DockStatus):
         self.is_docked = msg.is_docked
 
-    def distance(x1, y1, x2, y2):
+    def distance(self, x1, y1, x2, y2):
         return math.sqrt((x2 -x1)**2 + (y2 - y1)**2)
 
-    def calculate_final_pos(robot_x, robot_y, face_x, face_y):
-        dist_to_face = distance(robot_x, robot_y, face_x, face_y)
+    def calculate_final_pos(self, robot_x, robot_y, face_x, face_y):
+        dist_to_face = self.distance(robot_x, robot_y, face_x, face_y)
 
         adjusted_distance = max(0, dist_to_face - 0.3)
 
@@ -370,26 +371,28 @@ class RobotCommander(Node):
                 current_node = count
             count += 1
         
-        currRoboCordinates_x = rc.current_pose.pose.position.x
-        currRoboCordinates_y = rc.current_pose.pose.position.y
+        currRoboCordinates_x = self.current_pose.pose.position.x
+        currRoboCordinates_y = self.current_pose.pose.position.y
+        self.get_logger().info(f"Robot current coordinates are: {currRoboCordinates_x}, {currRoboCordinates_y}")
         
-        goalRoboCordinates_x, goalRoboCordinates_y = calculate_final_pos(currRoboCordinates_x, currRoboCordinates_y, world_x, world_y)
+        goalRoboCordinates_x, goalRoboCordinates_y = self.calculate_final_pos(currRoboCordinates_x, currRoboCordinates_y, world_x, world_y)
+        self.get_logger().info(f"Goal coordinates are: {currRoboCordinates_x}, {currRoboCordinates_y}")
 
         final_pos_x = (currRoboCordinates_x - world_x)
 
         # Finally send it a goal to reach
         goal_pose = PoseStamped()
         goal_pose.header.frame_id = 'map'
-        goal_pose.header.stamp = rc.get_clock().now().to_msg()
+        goal_pose.header.stamp = self.get_clock().now().to_msg()
 
-        goal_pose.pose.position.x = x
-        goal_pose.pose.position.y = y
-        goal_pose.pose.orientation = rc.YawToQuaternion(0.0)
+        goal_pose.pose.position.x = currRoboCordinates_x
+        goal_pose.pose.position.y = currRoboCordinates_y
+        goal_pose.pose.orientation = self.YawToQuaternion(0.0)
 
-        rc.goToPose(goal_pose)
+        self.goToPose(goal_pose)
 
-        while not rc.isTaskComplete():
-            rc.info("Waiting for the task to complete...")
+        while not self.isTaskComplete():
+            self.info("Waiting for the task to complete...")
             time.sleep(1)
         
 
