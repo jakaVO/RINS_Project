@@ -21,10 +21,13 @@ qos_profile = QoSProfile(
           history=QoSHistoryPolicy.KEEP_LAST,
           depth=1)
 
-class TranformPoints(Node):
+class TransformPoints(Node):
     """Demonstrating some convertions and loading the map as an image"""
-    def __init__(self):
+    def __init__(self, x, y):
         super().__init__('map_goals')
+
+        self.x = x
+        self.y = y
 
         # Basic ROS stuff
         timer_frequency = 1
@@ -51,9 +54,9 @@ class TranformPoints(Node):
         point_in_robot_frame.header.frame_id = "/base_link"
         point_in_robot_frame.header.stamp = self.get_clock().now().to_msg()
 
-        point_in_robot_frame.point.x = 0.5
-        point_in_robot_frame.point.y = 0.
-        point_in_robot_frame.point.z = 0. 
+        point_in_robot_frame.point.x = self.x
+        point_in_robot_frame.point.y = self.y
+        point_in_robot_frame.point.z = 0.
 
         # Now we look up the transform between the base_link and the map frames
         # and then we apply it to our PointStamped
@@ -117,7 +120,7 @@ class TranformPoints(Node):
 def main():
 
     rclpy.init(args=None)
-    node = TranformPoints()
+    node = TransformPoints()
     
     rclpy.spin(node)
     

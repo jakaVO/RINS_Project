@@ -36,6 +36,7 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from rclpy.qos import qos_profile_sensor_data
 from dis_tutorial3.msg import Coordinates
 from map_goals import MapGoals
+# from transform_point import TransformPoints
 from nav_msgs.msg import OccupancyGrid
 
 import numpy as np
@@ -43,6 +44,9 @@ from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from rclpy.qos import qos_profile_sensor_data
 import math
+
+from visualization_msgs.msg import Marker
+from playsound import playsound
 
 import tf_transformations
 
@@ -63,6 +67,17 @@ amcl_pose_qos = QoSProfile(
           reliability=QoSReliabilityPolicy.RELIABLE,
           history=QoSHistoryPolicy.KEEP_LAST,
           depth=1)
+
+listOfCordinates = [
+        [-1.53,-0.647, False],
+        [-0.105,-1.78, False],
+        [1.11,-2.0, False],
+        [3.09,-1.0, False],
+        [1.81,0.0418, False],
+        [2.25,1.95, False],
+        [0.932,1.71, False],
+        [-1.14,1.09, False]
+    ]
 
 class RobotCommander(Node):
 
@@ -86,6 +101,9 @@ class RobotCommander(Node):
                          "height":None,
                          "origin":None} # origin will be in the format [x,y,theta]
 
+        self.faces_coords_list = []
+        self.already_visited = []
+
         time.sleep(3)
 
         # ROS2 subscribers
@@ -100,6 +118,11 @@ class RobotCommander(Node):
                                  'coordinates',
                                  self._coordinatesCallback,
                                  qos_profile_sensor_data)
+
+        # self.create_subscription(Marker,
+        #                          'marker',
+        #                          self._markerCallback,
+        #                          qos_profile_sensor_data)
 
         self.localization_pose_sub = self.create_subscription(PoseWithCovarianceStamped,
                                                               'amcl_pose',
@@ -172,14 +195,18 @@ class RobotCommander(Node):
                   str(pose.pose.position.y) + '...')
         send_goal_future = self.nav_to_pose_client.send_goal_async(goal_msg,
                                                                    self._feedbackCallback)
+        self.info('Test1')
         rclpy.spin_until_future_complete(self, send_goal_future)
+        self.info('Test2')
         self.goal_handle = send_goal_future.result()
+        self.info('Test3')
 
         if not self.goal_handle.accepted:
             self.error('Goal to ' + str(pose.pose.position.x) + ' ' +
                        str(pose.pose.position.y) + ' was rejected!')
             return False
 
+        self.info('Test4')
         self.result_future = self.goal_handle.get_result_async()
         return True
 
@@ -340,10 +367,12 @@ class RobotCommander(Node):
         self.is_docked = msg.is_docked
 
     def distance(self, x1, y1, x2, y2):
-        return math.sqrt((x2 -x1)**2 + (y2 - y1)**2)
+        return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
     def calculate_final_pos(self, robot_x, robot_y, face_x, face_y):
         dist_to_face = self.distance(robot_x, robot_y, face_x, face_y)
+
+        self.get_logger().info(f"Distance to move: {dist_to_face - 0.3}")
 
         adjusted_distance = max(0, dist_to_face - 0.3)
 
@@ -355,13 +384,13 @@ class RobotCommander(Node):
 
         return final_x, final_y
 
-    def _coordinatesCallback(self, msg: Coordinates):
-        self.world_x = msg.x
-        self.world_y = msg.y
+    def _markerCallback(self, msg: Marker):
 
-        self.get_logger().info(f"Received coordinates are: {self.world_x}, {self.world_y}")
+        self.map_coordinate_x = msg.pose.position.x
+        self.map_coordinate_y = msg.pose.position.y
+        self.get_logger().info(f"Received map coordinates are: {self.map_coordinate_x}, {self.map_coordinate_y}")
 
-        world_x, world_y = self.map_pixel_to_world(self.world_x, self.world_y)
+        world_x, world_y = self.map_pixel_to_world(self.map_coordinate_x, self.map_coordinate_y)
         self.get_logger().info(f"Transformed coordinates are: {world_x}, {world_y}")
 
         current_node = None
@@ -376,25 +405,66 @@ class RobotCommander(Node):
         self.get_logger().info(f"Robot current coordinates are: {currRoboCordinates_x}, {currRoboCordinates_y}")
         
         goalRoboCordinates_x, goalRoboCordinates_y = self.calculate_final_pos(currRoboCordinates_x, currRoboCordinates_y, world_x, world_y)
-        self.get_logger().info(f"Goal coordinates are: {currRoboCordinates_x}, {currRoboCordinates_y}")
+        self.get_logger().info(f"Goal coordinates are: {goalRoboCordinates_x}, {goalRoboCordinates_y}")
 
-        final_pos_x = (currRoboCordinates_x - world_x)
+        # self.cancelTask()
+
+        self.get_logger().info(f"Sleeping for 3 seconds ...")
+        time.sleep(3)
 
         # Finally send it a goal to reach
         goal_pose = PoseStamped()
         goal_pose.header.frame_id = 'map'
         goal_pose.header.stamp = self.get_clock().now().to_msg()
 
-        goal_pose.pose.position.x = currRoboCordinates_x
-        goal_pose.pose.position.y = currRoboCordinates_y
+        goal_pose.pose.position.x = goalRoboCordinates_x
+        goal_pose.pose.position.y = goalRoboCordinates_y
         goal_pose.pose.orientation = self.YawToQuaternion(0.0)
 
         self.goToPose(goal_pose)
 
         while not self.isTaskComplete():
             self.info("Waiting for the task to complete...")
-            time.sleep(1)
+            time.sleep(3)
         
+        self.moveAcrossMap()
+
+    def _coordinatesCallback(self, msg: Coordinates):
+        self.map_x = msg.x
+        self.map_y = msg.y
+
+        self.get_logger().info(f"Received base/link coordinates are: {self.map_x}, {self.map_y}")
+
+        current_node = None
+        count = 0
+        for coordinates in listOfCordinates:
+            if coordinates[2]:
+                current_node = count
+            count += 1
+        
+        currRoboCordinates_x = self.current_pose.pose.position.x
+        currRoboCordinates_y = self.current_pose.pose.position.y
+        self.get_logger().info(f"Robot current coordinates are: {currRoboCordinates_x}, {currRoboCordinates_y}")
+        
+        goalRoboCordinates_x, goalRoboCordinates_y = self.calculate_final_pos(currRoboCordinates_x, currRoboCordinates_y, self.map_x, self.map_y)
+        self.get_logger().info(f"Goal coordinates are: {goalRoboCordinates_x}, {goalRoboCordinates_y}")
+
+        # self.cancelTask()
+
+        # self.get_logger().info(f"Sleeping for 3 seconds ...")
+        # time.sleep(3)
+        visit = True
+
+        for face in self.already_visited:
+            if self.distance(self.map_x, self.map_y, face[0], face[1]) < 0.7:
+                visit = False
+                break
+        if visit:
+            self.faces_coords_list.append((goalRoboCordinates_x, goalRoboCordinates_y))
+        # world_x, world_y = self.map_pixel_to_world(self.map_x, self.map_y)
+        # self.get_logger().info(f"Transformed coordinates are: {world_x}, {world_y}")
+
+        # self.transform_points = TransformPoints(self.world_x, self.world_y)
 
     def setInitialPose(self, pose):
         msg = PoseWithCovarianceStamped()
@@ -421,16 +491,78 @@ class RobotCommander(Node):
         self.get_logger().debug(msg)
         return
 
-listOfCordinates = [
-        [-1.53,-0.647, False],
-        [-0.105,-1.78, False],
-        [1.11,-2.0, False],
-        [3.09,-1.0, False],
-        [1.81,0.0418, False],
-        [2.25,1.95, False],
-        [0.932,1.71, False],
-        [-1.14,1.09, False]
-    ]
+    def moveAcrossMap(self):
+
+        current_node = 0
+        count = 0
+        for coordinates in listOfCordinates:
+            if coordinates[2]:
+                current_node = count + 1
+                break
+            count += 1
+
+        for el in listOfCordinates[current_node:]:
+            el[2] = True
+            x=el[0]
+            y=el[1]
+            # Finally send it a goal to reach
+            goal_pose = PoseStamped()
+            goal_pose.header.frame_id = 'map'
+            goal_pose.header.stamp = self.get_clock().now().to_msg()
+
+            goal_pose.pose.position.x = x
+            goal_pose.pose.position.y = y
+            goal_pose.pose.orientation = self.YawToQuaternion(0.0)
+
+            self.goToPose(goal_pose)
+
+            while not self.isTaskComplete():
+
+                self.info("Waiting for the task to complete...")
+                time.sleep(1)
+
+            # self.faces_coords_list = []
+
+            self.spin(-360.0)
+            self.info("sleep 10...")
+            time.sleep(10)
+
+            # check if there is any face to say hello to
+            if len(self.faces_coords_list) > 0:
+                
+                curr_x, curr_y = self.faces_coords_list[0]
+                if len(self.faces_coords_list) > 1:
+                    self.faces_coords_list = self.faces_coords_list[1:]
+                else:
+                    self.faces_coords_list = []
+
+                # Finally send it a goal to reach
+                goal_pose = PoseStamped()
+                goal_pose.header.frame_id = 'map'
+                goal_pose.header.stamp = self.get_clock().now().to_msg()
+
+                goal_pose.pose.position.x = curr_x
+                goal_pose.pose.position.y = curr_y
+                goal_pose.pose.orientation = self.YawToQuaternion(0.0)
+
+                self.already_visited.append((curr_x, curr_y))
+
+                self.goToPose(goal_pose)
+
+                while not self.isTaskComplete():
+                    self.info("Waiting for the task to complete...")
+                    time.sleep(3)
+                
+                # engine = pyttsx3.init()
+                # engine.save_to_file(text='Who is your Daddy', filename='test.wav')
+                # engine.runAndWait()
+
+                playsound("/home/pi/Documents/RINS_Project/src/dis_tutorial3/voice/voice.wav")
+                            
+            self.faces_coords_list = []
+            # self.moveAcrossMap()
+
+            el[2] = False
 
 def main(args=None):
     
@@ -448,30 +580,7 @@ def main(args=None):
     if rc.is_docked:
         rc.undock()
 
-    for el in listOfCordinates:
-        el[2] = True
-        x=el[0]
-        y=el[1]
-        # Finally send it a goal to reach
-        goal_pose = PoseStamped()
-        goal_pose.header.frame_id = 'map'
-        goal_pose.header.stamp = rc.get_clock().now().to_msg()
-
-        goal_pose.pose.position.x = x
-        goal_pose.pose.position.y = y
-        goal_pose.pose.orientation = rc.YawToQuaternion(0.0)
-
-        rc.goToPose(goal_pose)
-
-        while not rc.isTaskComplete():
-            rc.info("Waiting for the task to complete...")
-            time.sleep(1)
-
-        rc.spin(-360.0)
-        rc.info("sleep 10...")
-        time.sleep(10)
-
-        el[2] = False
+    rc.moveAcrossMap()
 
     rc.destroyNode()
 
