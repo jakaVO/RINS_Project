@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 from ultralytics import YOLO
-from robot_commander import listOfCordinates
+from dis_tutorial3.msg import Coordinates
 
 
 # from rclpy.parameter import Parameter
@@ -33,6 +33,7 @@ class detect_faces(Node):
 		])
 
 		marker_topic = "/people_marker"
+		coordinates_topic = "/coordinates"
 
 		self.detection_color = (0,0,255)
 		self.device = self.get_parameter('device').get_parameter_value().string_value
@@ -44,6 +45,7 @@ class detect_faces(Node):
 		self.pointcloud_sub = self.create_subscription(PointCloud2, "/oakd/rgb/preview/depth/points", self.pointcloud_callback, qos_profile_sensor_data)
 
 		self.marker_pub = self.create_publisher(Marker, marker_topic, QoSReliabilityPolicy.BEST_EFFORT)
+		self.coordinates_pub = self.create_publisher(Coordinates, coordinates_topic, QoSReliabilityPolicy.BEST_EFFORT)
 
 		self.model = YOLO("yolov8n.pt")
 
@@ -84,24 +86,32 @@ class detect_faces(Node):
 
 				self.faces.append((cx,cy))
 
-				self.get_logger().info(f"{listOfCordinates}")
+				coords = Coordinates()
+				coords.x = cx
+				coords.y = cy
 
-				all_nodes = [el for el in listOfCordinates if el[2] == True]
+				self.get_logger().info(f"Coordinates are: {coords.x}, {coords.y}")
 
-				current_node = None
-				if len(all_nodes) > 0:
-					all_nodes[0]
+				self.coordinates_pub.publish(coords)
 
-				if current_node != None:
+				# self.get_logger().info(f"{listOfCordinates}")
 
-					self.get_logger().info(f"Current node: {current_node}")
+				# all_nodes = [el for el in listOfCordinates if el[2] == True]
 
-					v1 = np.array([bbox[1][0] - bbox[0][0], bbox[1][1] - bbox[0][1], bbox[1][1] - bbox[0][1]])
+				# current_node = None
+				# if len(all_nodes) > 0:
+				# 	all_nodes[0]
 
-					v2 = np.array([bbox[2][0] - bbox[0][0], bbox[2][1] - bbox[0][1], bbox[2][1] - bbox[0][1]])
+				# if current_node != None:
 
-					normala = np.cross(v1, v2)
-					self.get_logger().info(f"normala: {normala}")
+				# 	self.get_logger().info(f"Current node: {current_node}")
+
+				# 	v1 = np.array([bbox[1][0] - bbox[0][0], bbox[1][1] - bbox[0][1], bbox[1][1] - bbox[0][1]])
+
+				# 	v2 = np.array([bbox[2][0] - bbox[0][0], bbox[2][1] - bbox[0][1], bbox[2][1] - bbox[0][1]])
+
+				# 	normala = np.cross(v1, v2)
+				# 	self.get_logger().info(f"normala: {normala}")
 
 
 

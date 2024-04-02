@@ -34,7 +34,22 @@ from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from rclpy.qos import qos_profile_sensor_data
+from dis_tutorial3.msg import Coordinates
+from map_goals import MapGoals
+from nav_msgs.msg import OccupancyGrid
 
+import numpy as np
+from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
+from rclpy.qos import qos_profile_sensor_data
+
+import tf_transformations
+
+qos_profile = QoSProfile(
+          durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+          reliability=QoSReliabilityPolicy.RELIABLE,
+          history=QoSHistoryPolicy.KEEP_LAST,
+          depth=1)
 
 class TaskResult(Enum):
     UNKNOWN = 0
@@ -62,13 +77,29 @@ class RobotCommander(Node):
         self.status = None
         self.initial_pose_received = False
         self.is_docked = None
+        #self.map_goals = MapGoals()
+
+        self.map_data = {"map_load_time":None,
+                         "resolution":None,
+                         "width":None,
+                         "height":None,
+                         "origin":None} # origin will be in the format [x,y,theta]
+
+        time.sleep(3)
 
         # ROS2 subscribers
+        self.occupancy_grid_sub = self.create_subscription(OccupancyGrid, "/map", self.map_callback, qos_profile)
+
         self.create_subscription(DockStatus,
                                  'dock_status',
                                  self._dockCallback,
                                  qos_profile_sensor_data)
         
+        self.create_subscription(Coordinates,
+                                 'coordinates',
+                                 self._coordinatesCallback,
+                                 qos_profile_sensor_data)
+
         self.localization_pose_sub = self.create_subscription(PoseWithCovarianceStamped,
                                                               'amcl_pose',
                                                               self._amclPoseCallback,
@@ -86,6 +117,41 @@ class RobotCommander(Node):
         self.dock_action_client = ActionClient(self, Dock, 'dock')
 
         self.get_logger().info(f"Robot commander has been initialized!")
+
+    def map_callback(self, msg):
+        self.get_logger().info(f"Read a new Map (Occupancy grid) from the topic.")
+        # reshape the message vector back into a map
+        self.map_np = np.asarray(msg.data, dtype=np.int8).reshape(msg.info.height, msg.info.width)
+        # fix the direction of Y (origin at top for OpenCV, origin at bottom for ROS2)
+        self.map_np = np.flipud(self.map_np)
+        # change the colors so they match with the .pgm image
+        self.map_np[self.map_np==0] = 127
+        self.map_np[self.map_np==100] = 0
+        # load the map parameters
+        self.map_data["map_load_time"]=msg.info.map_load_time
+        self.map_data["resolution"]=msg.info.resolution
+        self.map_data["width"]=msg.info.width
+        self.map_data["height"]=msg.info.height
+        quat_list = [msg.info.origin.orientation.x,
+                     msg.info.origin.orientation.y,
+                     msg.info.origin.orientation.z,
+                     msg.info.origin.orientation.w]
+        self.map_data["origin"]=[msg.info.origin.position.x,
+                                 msg.info.origin.position.y,
+                                 tf_transformations.euler_from_quaternion(quat_list)[-1]]
+
+    def map_pixel_to_world(self, x, y, theta=0):
+        ### Convert a pixel in an numpy image, to a real world location
+        ### Works only for theta=0
+        assert not self.map_data["resolution"] is None
+
+        # Apply resolution, change of origin, and translation
+        # 
+        world_x = x*self.map_data["resolution"] + self.map_data["origin"][0]
+        world_y = (self.map_data["height"]-y)*self.map_data["resolution"] + self.map_data["origin"][1]
+
+        # Apply rotation
+        return world_x, world_y
         
     def destroyNode(self):
         self.nav_to_pose_client.destroy()
@@ -272,6 +338,61 @@ class RobotCommander(Node):
     def _dockCallback(self, msg: DockStatus):
         self.is_docked = msg.is_docked
 
+    def distance(x1, y1, x2, y2):
+        return math.sqrt((x2 -x1)**2 + (y2 - y1)**2)
+
+    def calculate_final_pos(robot_x, robot_y, face_x, face_y):
+        dist_to_face = distance(robot_x, robot_y, face_x, face_y)
+
+        adjusted_distance = max(0, dist_to_face - 0.3)
+
+        dir_x = (face_x - robot_x) / dist_to_face
+        dir_y = (face_y - robot_y) / dist_to_face
+
+        final_x = robot_x + dir_x * adjusted_distance
+        final_y = robot_y + dir_y * adjusted_distance
+
+        return final_x, final_y
+
+    def _coordinatesCallback(self, msg: Coordinates):
+        self.world_x = msg.x
+        self.world_y = msg.y
+
+        self.get_logger().info(f"Received coordinates are: {self.world_x}, {self.world_y}")
+
+        world_x, world_y = self.map_pixel_to_world(self.world_x, self.world_y)
+        self.get_logger().info(f"Transformed coordinates are: {world_x}, {world_y}")
+
+        current_node = None
+        count = 0
+        for coordinates in listOfCordinates:
+            if coordinates[2]:
+                current_node = count
+            count += 1
+        
+        currRoboCordinates_x = rc.current_pose.pose.position.x
+        currRoboCordinates_y = rc.current_pose.pose.position.y
+        
+        goalRoboCordinates_x, goalRoboCordinates_y = calculate_final_pos(currRoboCordinates_x, currRoboCordinates_y, world_x, world_y)
+
+        final_pos_x = (currRoboCordinates_x - world_x)
+
+        # Finally send it a goal to reach
+        goal_pose = PoseStamped()
+        goal_pose.header.frame_id = 'map'
+        goal_pose.header.stamp = rc.get_clock().now().to_msg()
+
+        goal_pose.pose.position.x = x
+        goal_pose.pose.position.y = y
+        goal_pose.pose.orientation = rc.YawToQuaternion(0.0)
+
+        rc.goToPose(goal_pose)
+
+        while not rc.isTaskComplete():
+            rc.info("Waiting for the task to complete...")
+            time.sleep(1)
+        
+
     def setInitialPose(self, pose):
         msg = PoseWithCovarianceStamped()
         msg.pose.pose = pose
@@ -319,7 +440,7 @@ def main(args=None):
     # Check if the robot is docked, only continue when a message is recieved
     while rc.is_docked is None:
         rclpy.spin_once(rc, timeout_sec=0.5)
-
+        
     # If it is docked, undock it first
     if rc.is_docked:
         rc.undock()
