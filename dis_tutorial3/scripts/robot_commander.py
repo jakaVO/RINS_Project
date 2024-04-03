@@ -76,14 +76,16 @@ amcl_pose_qos = QoSProfile(
           depth=1)
 
 listOfCordinates = [
-        [-1.53,-0.647, False],
+        [-1.43,-0.6, False],
         [-0.105,-1.78, False],
         [1.11,-2.0, False],
         [3.09,-1.0, False],
-        [1.81,0.0418, False],
+        [1.05,-0.00697, False],
         [2.25,1.95, False],
-        [0.932,1.71, False],
-        [-1.14,1.09, False]
+        [-1.53,1.35, False],
+        [-1.51,4.55, False],
+        [-0.432,3.2, False],
+        [1.53,3.25, False],
     ]
 
 class RobotCommander(Node):
@@ -398,9 +400,9 @@ class RobotCommander(Node):
     def calculate_final_pos(self, robot_x, robot_y, face_x, face_y):
         dist_to_face = self.distance(robot_x, robot_y, face_x, face_y)
 
-        self.get_logger().info(f"Distance to move: {dist_to_face - 0.3}")
+        self.get_logger().info(f"Distance to move: {dist_to_face - 0.5}")
 
-        adjusted_distance = max(0, dist_to_face - 0.3)
+        adjusted_distance = max(0, dist_to_face - 0.5)
 
         dir_x = (face_x - robot_x) / dist_to_face
         dir_y = (face_y - robot_y) / dist_to_face
@@ -482,7 +484,7 @@ class RobotCommander(Node):
         visit = True
 
         for face in self.already_visited:
-            if self.distance(self.map_x, self.map_y, face[0], face[1]) < 0.7:
+            if self.distance(self.map_x, self.map_y, face[0], face[1]) < 0.6:
                 visit = False
                 break
         if visit:
