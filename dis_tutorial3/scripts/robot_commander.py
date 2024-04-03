@@ -47,6 +47,13 @@ import math
 
 from visualization_msgs.msg import Marker
 from playsound import playsound
+import pyttsx3
+from pydub import AudioSegment
+from pydub.playback import play
+
+import pygame
+from gtts import gTTS
+from tempfile import TemporaryFile
 
 import tf_transformations
 
@@ -181,6 +188,21 @@ class RobotCommander(Node):
         self.nav_to_pose_client.destroy()
         super().destroy_node()     
 
+    def say_hello(self):
+        text = "What is up"
+        textToSpeech = gTTS(text=text, lang='en')
+        temp_file = TemporaryFile()
+        textToSpeech.write_to_fp(temp_file)
+        temp_file.seek(0)
+        pygame.mixer.init()
+        pygame.mixer.music.load(temp_file)
+        pygame.mixer.music.play()
+
+        while pygame.mixer.music.get_busy():
+            time.sleep(1)
+
+        temp_file.close()
+
     def goToPose(self, pose, behavior_tree=''):
         """Send a `NavToPose` action request."""
         self.debug("Waiting for 'NavigateToPose' action server")
@@ -193,13 +215,17 @@ class RobotCommander(Node):
 
         self.info('Navigating to goal: ' + str(pose.pose.position.x) + ' ' +
                   str(pose.pose.position.y) + '...')
+        # time.sleep(3)
         send_goal_future = self.nav_to_pose_client.send_goal_async(goal_msg,
                                                                    self._feedbackCallback)
         self.info('Test1')
+        # time.sleep(3)
         rclpy.spin_until_future_complete(self, send_goal_future)
         self.info('Test2')
+        # time.sleep(3)
         self.goal_handle = send_goal_future.result()
         self.info('Test3')
+        # time.sleep(3)
 
         if not self.goal_handle.accepted:
             self.error('Goal to ' + str(pose.pose.position.x) + ' ' +
@@ -543,7 +569,7 @@ class RobotCommander(Node):
 
                 goal_pose.pose.position.x = curr_x
                 goal_pose.pose.position.y = curr_y
-                goal_pose.pose.orientation = self.YawToQuaternion(0.0)
+                # goal_pose.pose.orientation = self.YawToQuaternion(0.0)
 
                 self.already_visited.append((curr_x, curr_y))
 
@@ -552,13 +578,17 @@ class RobotCommander(Node):
                 while not self.isTaskComplete():
                     self.info("Waiting for the task to complete...")
                     time.sleep(3)
+
+                self.say_hello()
                 
                 # engine = pyttsx3.init()
-                # engine.save_to_file(text='Who is your Daddy', filename='test.wav')
+                # engine.say("Hello")
                 # engine.runAndWait()
 
-                playsound("/home/pi/Documents/RINS_Project/src/dis_tutorial3/voice/voice.wav")
-                            
+                # playsound("/home/pi/Documents/RINS_Project/src/dis_tutorial3/voice/voice.wav")
+                # song = AudioSegment.from_wav("/home/pi/Documents/RINS_Project/src/dis_tutorial3/voice/voice.wav")
+                # play(song)
+
             self.faces_coords_list = []
             # self.moveAcrossMap()
 
