@@ -220,21 +220,14 @@ class RobotCommander(Node):
         # time.sleep(3)
         send_goal_future = self.nav_to_pose_client.send_goal_async(goal_msg,
                                                                    self._feedbackCallback)
-        self.info('Test1')
-        # time.sleep(3)
         rclpy.spin_until_future_complete(self, send_goal_future)
-        self.info('Test2')
-        # time.sleep(3)
         self.goal_handle = send_goal_future.result()
-        self.info('Test3')
-        # time.sleep(3)
 
         if not self.goal_handle.accepted:
             self.error('Goal to ' + str(pose.pose.position.x) + ' ' +
                        str(pose.pose.position.y) + ' was rejected!')
             return False
 
-        self.info('Test4')
         self.result_future = self.goal_handle.get_result_async()
         return True
 
@@ -245,7 +238,6 @@ class RobotCommander(Node):
         goal_msg = Spin.Goal()
         goal_msg.target_yaw = spin_dist
         goal_msg.time_allowance = Duration(sec=time_allowance)
-
         self.info(f'Spinning to angle {goal_msg.target_yaw}....')
         send_goal_future = self.spin_client.send_goal_async(goal_msg, self._feedbackCallback)
         rclpy.spin_until_future_complete(self, send_goal_future)
@@ -254,7 +246,6 @@ class RobotCommander(Node):
         if not self.goal_handle.accepted:
             self.error('Spin request was rejected!')
             return False
-
         self.result_future = self.goal_handle.get_result_async()
         return True
     
@@ -447,7 +438,8 @@ class RobotCommander(Node):
 
         goal_pose.pose.position.x = goalRoboCordinates_x
         goal_pose.pose.position.y = goalRoboCordinates_y
-        goal_pose.pose.orientation = self.YawToQuaternion(0.0)
+        # goal_pose.pose.orientation = self.YawToQuaternion(2.5)
+        goal_pose.pose.orientation = self.current_pose.pose.orientation
 
         self.goToPose(goal_pose)
 
@@ -488,7 +480,7 @@ class RobotCommander(Node):
                 visit = False
                 break
         if visit:
-            self.faces_coords_list.append((goalRoboCordinates_x, goalRoboCordinates_y))
+            self.faces_coords_list.append((goalRoboCordinates_x, goalRoboCordinates_y, self.current_pose.pose.orientation))
         # world_x, world_y = self.map_pixel_to_world(self.map_x, self.map_y)
         # self.get_logger().info(f"Transformed coordinates are: {world_x}, {world_y}")
 
@@ -540,7 +532,8 @@ class RobotCommander(Node):
 
             goal_pose.pose.position.x = x
             goal_pose.pose.position.y = y
-            goal_pose.pose.orientation = self.YawToQuaternion(0.0)
+            # goal_pose.pose.orientation = self.YawToQuaternion(0.0)
+            goal_pose.pose.orientation = self.current_pose.pose.orientation
 
             self.goToPose(goal_pose)
 
@@ -558,7 +551,7 @@ class RobotCommander(Node):
             # check if there is any face to say hello to
             if len(self.faces_coords_list) > 0:
                 
-                curr_x, curr_y = self.faces_coords_list[0]
+                curr_x, curr_y, orientation = self.faces_coords_list[0]
                 if len(self.faces_coords_list) > 1:
                     self.faces_coords_list = self.faces_coords_list[1:]
                 else:
@@ -571,7 +564,8 @@ class RobotCommander(Node):
 
                 goal_pose.pose.position.x = curr_x
                 goal_pose.pose.position.y = curr_y
-                # goal_pose.pose.orientation = self.YawToQuaternion(0.0)
+                # goal_pose.pose.orientation = self.YawToQuaternion(2.5)
+                goal_pose.pose.orientation = orientation
 
                 self.already_visited.append((curr_x, curr_y))
 
