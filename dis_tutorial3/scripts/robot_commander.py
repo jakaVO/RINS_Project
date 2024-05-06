@@ -123,9 +123,14 @@ class RobotCommander(Node):
                                  self._dockCallback,
                                  qos_profile_sensor_data)
         
+        # self.create_subscription(Coordinates,
+        #                          'coordinates',
+        #                          self._coordinatesCallback,
+        #                          qos_profile_sensor_data)
+
         self.create_subscription(Coordinates,
-                                 'coordinates',
-                                 self._coordinatesCallback,
+                                 'ring',
+                                 self._ringCallback,
                                  qos_profile_sensor_data)
 
         # self.create_subscription(Marker,
@@ -485,6 +490,33 @@ class RobotCommander(Node):
         # self.get_logger().info(f"Transformed coordinates are: {world_x}, {world_y}")
 
         # self.transform_points = TransformPoints(self.world_x, self.world_y)
+
+    def _ringCallback(self, coords: Coordinates):
+        center_x = coords.x
+        center_y = coords.y
+
+        self.get_logger().info(f"Received ring pixel coordinates are: {center_x}, {center_y}")    
+
+        world_x, world_y = self.map_pixel_to_world(center_x, center_y)
+        self.get_logger().info(f"Transformed coordinates are: {world_x}, {world_y}")
+
+        # Finally send it a goal to reach
+        goal_pose = PoseStamped()
+        goal_pose.header.frame_id = 'map'
+        goal_pose.header.stamp = self.get_clock().now().to_msg()
+
+        goal_pose.pose.position.x = world_x
+        goal_pose.pose.position.y = world_y
+        goal_pose.pose.orientation = self.YawToQuaternion(0.0)
+        # goal_pose.pose.orientation = self.current_pose.pose.orientation
+
+        self.goToPose(goal_pose)
+
+        while not self.isTaskComplete():
+            self.info("Waiting for the task to complete...")
+            time.sleep(3)
+        
+        self.moveAcrossMap()
 
     def setInitialPose(self, pose):
         msg = PoseWithCovarianceStamped()
