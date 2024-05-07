@@ -168,7 +168,7 @@ class detect_faces(Node):
 
 		# iterate over face coordinates
 		for x,y in self.faces:
-
+			
 			# get 3-channel representation of the poitn cloud in numpy format
 			a = pc2.read_points_numpy(data, field_names= ("x", "y", "z"))
 			a = a.reshape((height,width,3))

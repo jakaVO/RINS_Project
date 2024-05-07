@@ -55,6 +55,8 @@ import pygame
 from gtts import gTTS
 from tempfile import TemporaryFile
 
+from std_msgs.msg import String
+
 import tf_transformations
 
 qos_profile = QoSProfile(
@@ -117,6 +119,8 @@ class RobotCommander(Node):
 
         # ROS2 subscribers
         self.occupancy_grid_sub = self.create_subscription(OccupancyGrid, "/map", self.map_callback, qos_profile)
+
+        self.arm_publisher = self.create_publisher(String, "/arm_command", QoSReliabilityPolicy.BEST_EFFORT)
 
         self.create_subscription(DockStatus,
                                  'dock_status',
@@ -497,18 +501,22 @@ class RobotCommander(Node):
 
         self.get_logger().info(f"Received ring pixel coordinates are: {center_x}, {center_y}")    
 
-        world_x, world_y = self.map_pixel_to_world(center_x, center_y)
-        self.get_logger().info(f"Transformed coordinates are: {world_x}, {world_y}")
+        # world_x, world_y = self.map_pixel_to_world(center_x, center_y)
+        # self.get_logger().info(f"Transformed coordinates are: {world_x}, {world_y}")
 
         # Finally send it a goal to reach
         goal_pose = PoseStamped()
         goal_pose.header.frame_id = 'map'
         goal_pose.header.stamp = self.get_clock().now().to_msg()
 
-        goal_pose.pose.position.x = world_x
-        goal_pose.pose.position.y = world_y
+        goal_pose.pose.position.x = center_x
+        goal_pose.pose.position.y = center_y
         goal_pose.pose.orientation = self.YawToQuaternion(0.0)
         # goal_pose.pose.orientation = self.current_pose.pose.orientation
+
+        arm_command = String()
+        arm_command.data = "look_for_parking"
+        self.arm_publisher.publish(arm_command)
 
         self.goToPose(goal_pose)
 

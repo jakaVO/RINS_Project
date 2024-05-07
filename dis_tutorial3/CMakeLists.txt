@@ -44,6 +44,7 @@ install(PROGRAMS
   scripts/map_goals.py
   scripts/transform_point.py
   scripts/detect_rings.py
+  scripts/arm_mover_actions.py
   DESTINATION lib/${PROJECT_NAME})
 
 # This is needed if our exported targets depend on interfaces built in the package
